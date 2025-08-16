@@ -74,37 +74,52 @@ class DatabaseManager:
         conn = sqlite3.connect(self.database)
         with conn:
             cur = conn.cursor()
-            cur.execute("SELECT user_id FROM users")
+            cur.execute('SELECT * FROM users')
             return [x[0] for x in cur.fetchall()] 
-        
+    
     def get_prize_img(self, prize_id):
         conn = sqlite3.connect(self.database)
         with conn:
             cur = conn.cursor()
-            cur.execute("SELECT image FROM prizes WHERE prize_id = ?", (prize_id,))
-            result = cur.fetchone()
-            return result[0] if result else None
+            cur.execute('SELECT image FROM prizes WHERE prize_id = ?', (prize_id, ))
+            return cur.fetchall()[0][0]
 
     def get_random_prize(self):
         conn = sqlite3.connect(self.database)
         with conn:
             cur = conn.cursor()
-            cur.execute("SELECT prize_id, image FROM prizes WHERE used = 0 ORDER BY RANDOM() LIMIT 1")
-            result = cur.fetchone()
-            if result:
-                return (result[0], result[1])  
-            return None
-    
-    def get_random_prize(self):
+            cur.execute('SELECT * FROM prizes WHERE used = 0 ORDER BY RANDOM()')
+            return cur.fetchall()[0]
+        
+    def get_winners_count(self, prize_id):
         conn = sqlite3.connect(self.database)
         with conn:
             cur = conn.cursor()
-            cur.execute("SELECT prize_id, image FROM prizes WHERE used = 0 ORDER BY RANDOM() LIMIT 1")
+            cur.execute("""
+                SELECT COUNT(*) 
+                FROM winners 
+                WHERE prize_id = ?
+            """, (prize_id,))
             result = cur.fetchone()
-            if result:
-                return (result[0], result[1])
-            return None
-  
+            return result[0] if result else 0
+   
+   
+    
+    def get_rating(self):
+        conn = sqlite3.connect(self.database)
+        with conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT u.user_name, COUNT(w.prize_id) as prizes_count
+                FROM winners w
+                JOIN users u ON w.user_id = u.user_id
+                GROUP BY w.user_id
+                ORDER BY prizes_count DESC
+                LIMIT 3
+            """)
+
+    
+    
 def hide_img(img_name):
     image = cv2.imread(f'img/{img_name}')
     blurred_image = cv2.GaussianBlur(image, (15, 15), 0)
