@@ -5,6 +5,7 @@ import schedule
 import threading
 import time
 from config import DATABASE 
+import os
 bot = TeleBot("7913448899:AAG_naSZlVR9Rk2JTOtSfRfLDYboeRmN9tI")
 
 def gen_markup(id):
@@ -34,7 +35,7 @@ def send_message():
         
 
 def shedule_thread():
-    schedule.every().minute.do(send_message) # Здесь ты можешь задать периодичность отправки картинок
+    schedule.every().minute.do(send_message) 
     while True:
         schedule.run_pending()
         time.sleep(1)
@@ -52,6 +53,51 @@ def handle_start(message):
 Для этого нужно быстрее всех нажать на кнопку 'Получить!'
 
 Только три первых пользователя получат картинку!)""")
+@bot.message_handler(commands=['rating'])
+def handle_rating(message):
+    rating_data = manager.get_rating()  
+    if not rating_data:
+        bot.send_message(message.chat.id, "Рейтинг пока пуст!")
+        return
+    header = "| Имя пользователя | Количество призов |\n" + "-"*35
+    rows = [f"| @{row[0]:<15} | {row[1]:<16} |" for row in rating_data]
+    rating_table = header + "\n" + "\n".join(rows)
+    
+    bot.send_message(message.chat.id, f"<pre>{rating_table}</pre>", parse_mode='HTML')
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    prize_id = call.data
+    user_id = call.message.chat.id
+    winners_count = manager.get_winners_count(prize_id)
+    
+    if winners_count < 3:
+        result = manager.add_winner(user_id, prize_id)
+        if result == 1:  
+            manager.mark_prize_as_used(prize_id)
+            prize_image = manager.get_prize_image(prize_id)
+            
+            if prize_image and os.path.exists(f'img/{prize_image}'):
+                with open(f'img/{prize_image}', 'rb') as photo:
+                    bot.send_photo(
+                        user_id, 
+                        photo, 
+                        caption="🎉 Поздравляем! Вы получили приз!"
+                    )
+            else:
+                bot.send_message(user_id, "⚠️ Изображение приза не найдено!")
+        elif result == 0:
+            bot.answer_callback_query(
+                call.id, 
+                "Вы уже получали этот приз!", 
+                show_alert=True
+            )
+    else:
+        bot.answer_callback_query(
+            call.id,
+            "К сожалению, приз уже получили 3 участника! Попробуйте в следующий раз!",
+            show_alert=True
+        )
         
 
 
